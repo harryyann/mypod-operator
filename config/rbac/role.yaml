@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - harryyann.github.io
+  resources:
+  - mypods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - harryyann.github.io
+  resources:
+  - mypods/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - harryyann.github.io
+  resources:
+  - mypods/status
+  verbs:
+  - get
+  - patch
+  - update

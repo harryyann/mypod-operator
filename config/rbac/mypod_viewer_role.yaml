@@ -1,0 +1,20 @@
+# permissions for end users to view mypods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mypod-viewer-role
+rules:
+- apiGroups:
+  - harryyann.github.io
+  resources:
+  - mypods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - harryyann.github.io
+  resources:
+  - mypods/status
+  verbs:
+  - get

@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: test-mypod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: test-myapp
+  labels:
+    sym-app: mypod
+    control-plane: controller-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+        v2-subnet: 5ca060b7-0763-40fc-accb-05c2387835a1
+        v2-tenant: 20a28f78a1a646379db70759a3975e02
+        v2-vpc: 6af350be-c456-44bc-909d-4b92c48b3b54
+      labels:
+        control-plane: controller-manager
+        sym-app: mypod
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - command:
+        - /manager
+        args:
+        - --leader-elect
+        image: ncr.nie.netease.com/test/mypod-operator:0.1
+        imagePullPolicy: Always
+        name: manager
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+      serviceAccountName: mypod-controller-manager
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: 10

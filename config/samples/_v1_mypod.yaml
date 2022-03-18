@@ -1,0 +1,23 @@
+apiVersion: harryyann.github.io/v1
+kind: MyPod
+metadata:
+  name: mypod-sample
+  namespace: test-mypod
+spec:
+  podAnnotations:
+    v2-subnet: 5ca060b7-0763-40fc-accb-05c2387835a1
+    v2-tenant: 20a28f78a1a646379db70759a3975e02
+    v2-vpc: 6af350be-c456-44bc-909d-4b92c48b3b54
+  podLabels:
+    sym-app: mypod
+  podSpec:
+    containers:
+    - image: ncr.nie.netease.com/gcr.io/google-containers/pause:3.1
+      imagePullPolicy: IfNotPresent
+      name: main
+      resources:
+        limits:
+          cpu: 50m
+          memory: 50Mi
+    nodeSelector:
+      project: test
