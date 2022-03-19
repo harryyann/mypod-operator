@@ -23,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"time"
 
 	mypodv1 "github.com/harryyann/mypod-operator/api/v1"
 )
@@ -51,22 +52,25 @@ func (r *MyPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// 按照name和namespace获取MyPod对象
 	myPod := mypodv1.MyPod{}
-	pod := v1.Pod{}
-
 	err := r.Get(ctx, req.NamespacedName, &myPod)
-	if client.IgnoreNotFound(err) == nil {
-		// 没有MyPod对象就要把pod删除了
-		pod.Name = req.Name
-		pod.Namespace = req.Namespace
-		err := r.Delete(ctx, &pod, &client.DeleteOptions{})
-		if err != nil {
-			logger.Error(err, "delete pod error")
+	if err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			// 如果mypod对象没有的话，就把对应的pod删了
+			pod := v1.Pod{}
+			pod.Name = myPod.Name
+			pod.Namespace = myPod.Namespace
+			err = r.Delete(ctx, &pod)
 		}
 		return ctrl.Result{}, err
 	}
 
+	pod := v1.Pod{}
 	err = r.Get(ctx, req.NamespacedName, &pod)
-	if client.IgnoreNotFound(err) == nil {
+	if client.IgnoreNotFound(err) != nil {
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+	} else {
 		// 没有这个pod就创建一个
 		pod.Name = myPod.Name
 		pod.Namespace = myPod.Namespace
@@ -80,53 +84,39 @@ func (r *MyPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			return ctrl.Result{}, err
 		}
 		logger.Info("create pod " + pod.Name + " success")
-	}
-	if err == nil {
-		pod.Name = myPod.Name
-		pod.Namespace = myPod.Namespace
-		pod.Annotations = myPod.Spec.PodAnnotations
-		pod.Labels = myPod.Spec.PodLabels
-		pod.Labels["creator"] = "mypod-controller"
-		pod.Spec = myPod.Spec.PodSpec
-		err := r.Update(ctx, &pod, &client.UpdateOptions{})
-		if err != nil {
-			logger.Error(err, "update pod error")
-			return ctrl.Result{}, err
-		}
+		goto UpdateStatus
 	}
 
-	//// 先获取所有真实pod，然后给mypod对象更新status字段
-	//pods := v1.PodList{}
-	//err = r.List(ctx, &pods, &client.ListOptions{
-	//	LabelSelector: labels.SelectorFromSet(map[string]string{
-	//		"creator": "mypod-controller",
-	//	}),
-	//})
-	//if err != nil {
-	//	logger.Error(err, "list pods error")
-	//} else {
-	//	for _, p := range pods.Items {
-	//		var mypod = mypodv1.MyPod{}
-	//		err = r.Get(ctx, types.NamespacedName{
-	//			Name:      p.Name,
-	//			Namespace: p.Namespace,
-	//		}, &mypod)
-	//		if err != nil {
-	//			logger.Error(err, "pod exist but no mypod "+p.Name)
-	//			continue
-	//		}
-	//		mypod.Status.PodIp = p.Status.PodIP
-	//		mypod.Status.NodeIp = p.Status.HostIP
-	//		mypod.Status.PodPhase = string(p.Status.Phase)
-	//		mypod.Status.CreatedTimestamp = p.CreationTimestamp.Unix()
-	//		err := r.Status().Update(ctx, &mypod)
-	//		if err != nil {
-	//			logger.Error(err, "Update mypod "+mypod.Name+" status error")
-	//		}
-	//		logger.Info("Update mypod "+mypod.Name+" status success")
-	//	}
-	//}
+	// 更新我们就先把pod删了，再重建
+	err = r.Delete(ctx, &pod)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	pod = v1.Pod{}
+	pod.Name = myPod.Name
+	pod.Namespace = myPod.Namespace
+	pod.Annotations = myPod.Spec.PodAnnotations
+	pod.Labels = myPod.Spec.PodLabels
+	pod.Labels["creator"] = "mypod-controller"
+	pod.Spec = myPod.Spec.PodSpec
+	err = r.Create(ctx, &pod, &client.CreateOptions{})
+	if err != nil {
+		logger.Error(err, "create pod error")
+		return ctrl.Result{}, err
+	}
+	logger.Info("update pod " + pod.Name + " success")
 
+UpdateStatus:
+	// 在创建这个pod之后持续的监控这个pod，拿到想要的状态信息，填到status中，这里简化写，就让它睡5秒得了
+	time.Sleep(time.Second * 5)
+	err = r.Get(ctx, req.NamespacedName, &pod)
+	myPod.Status.PodPhase = string(pod.Status.Phase)
+	myPod.Status.NodeIp = pod.Status.HostIP
+	myPod.Status.PodIp = pod.Status.PodIP
+	err = r.Status().Update(ctx, &myPod)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
